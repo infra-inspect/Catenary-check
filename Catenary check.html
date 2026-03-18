@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cable Analyser v3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.1/plotly.min.js"></script>
+<style>
+:root {
+  --bg:       #f5f3ef;
+  --surface:  #ffffff;
+  --surface2: #f0ece4;
+  --border:   #ddd9d0;
+  --text:     #1c1b18;
+  --muted:    #7a7770;
+  --accent:   #2e6b8a;
+  --accent-l: #e4f0f5;
+  --green:    #2e7a52;
+  --green-l:  #e4f5ed;
+  --amber:    #a05c12;
+  --amber-l:  #fdf3e4;
+  --red:      #b03030;
+  --red-l:    #fde8e8;
+  --radius:   10px;
+  --radius-s: 6px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── Header ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:52px;display:flex;align-items:center;gap:1rem;flex-shrink:0;}
+header h1{font-size:1rem;font-weight:600;letter-spacing:.01em;}
+header .sub{font-size:.78rem;color:var(--muted);padding-left:1rem;border-left:1px solid var(--border);}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:300px 1fr;flex:1;min-height:0;}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:1rem;gap:1rem;}
+.main{display:flex;flex-direction:column;min-height:0;}
+
+/* ── Sidebar sections ── */
+.sec-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.6rem;}
+
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:1.25rem 1rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:var(--accent-l);}
+.drop-zone svg{display:block;margin:0 auto .5rem;opacity:.4;}
+.drop-zone p{font-size:.82rem;color:var(--muted);}
+.drop-zone strong{color:var(--accent);}
+#file-input{display:none;}
+
+.tree{display:flex;flex-direction:column;gap:2px;}
+/* folders */
+.tree-folder-row{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:var(--radius-s);font-size:.82rem;color:var(--text);cursor:pointer;user-select:none;}
+.tree-folder-row:hover{background:var(--bg);}
+.tree-folder-row.drag-over{background:var(--accent-l);outline:2px dashed var(--accent);}
+.tree-folder-toggle{font-size:.65rem;width:12px;text-align:center;color:var(--muted);flex-shrink:0;transition:transform .15s;}
+.tree-folder-toggle.open{transform:rotate(90deg);}
+.tree-folder-name{flex:1;font-weight:600;font-size:.8rem;}
+.tree-folder-name-input{flex:1;font-size:.8rem;font-weight:600;border:1px solid var(--accent);border-radius:3px;padding:1px 4px;background:var(--surface);color:var(--text);font-family:inherit;outline:none;}
+.tree-folder-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;}
+.tree-folder-row:hover .tree-folder-actions{opacity:1;}
+.tree-folder-children{padding-left:14px;display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+.tree-folder-children.collapsed{display:none;}
+/* files */
+.tree-file{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius-s);font-size:.8rem;cursor:pointer;transition:background .15s;position:relative;}
+.tree-file:hover{background:var(--bg);}
+.tree-file.active{background:var(--accent-l);color:var(--accent);}
+.tree-file[draggable]{cursor:grab;}
+.tree-file.dragging{opacity:.4;}
+.tree-file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tree-file-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;flex-shrink:0;}
+.tree-file:hover .tree-file-actions{opacity:1;}
+.tree-badge{background:var(--border);font-size:.68rem;padding:1px 5px;border-radius:8px;color:var(--muted);}
+/* icon buttons used in tree */
+.icon-btn{border:none;background:none;cursor:pointer;color:var(--muted);font-size:.8rem;padding:1px 3px;border-radius:3px;line-height:1;}
+.icon-btn:hover{background:var(--border);color:var(--text);}
+.icon-btn.red:hover{background:var(--red-l);color:var(--red);}
+/* add-folder row */
+.tree-add-folder{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:var(--radius-s);font-size:.78rem;color:var(--muted);cursor:pointer;margin-top:4px;}
+.tree-add-folder:hover{background:var(--bg);color:var(--accent);}
+
+.divider{height:1px;background:var(--border);}
+
+.step-list{display:flex;flex-direction:column;gap:6px;}
+.step-btn{width:100%;padding:8px 12px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.83rem;cursor:pointer;transition:all .15s;text-align:left;display:flex;align-items:center;gap:8px;font-family:inherit;}
+.step-btn:hover:not(:disabled){background:var(--bg);}
+.step-btn:disabled{opacity:.38;cursor:not-allowed;}
+.step-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.step-btn.primary:hover:not(:disabled){opacity:.9;}
+.step-btn .num{width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;}
+.step-btn.done .num{background:var(--green);border-color:var(--green);color:#fff;}
+
+.tower-info{font-size:.78rem;color:var(--muted);line-height:1.7;}
+.tower-info b{color:var(--text);}
+
+/* ── Tabs ── */
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 1.5rem;flex-shrink:0;}
+.tab{padding:.75rem 1rem;font-size:.83rem;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+.pane{flex:1;overflow:auto;padding:1.5rem;display:none;flex-direction:column;gap:1.25rem;}
+.pane.active{display:flex;}
+
+/* ── Plot ── */
+#plot-div{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-height:460px;}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;color:var(--muted);text-align:center;padding:3rem;}
+.empty-state .icon{font-size:2.5rem;opacity:.3;}
+
+/* ── Result cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1rem;}
+.card .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;}
+.card .val{font-size:1.3rem;font-weight:500;color:var(--text);}
+.card .unit{font-size:.75rem;color:var(--muted);margin-left:3px;}
+.card.green{background:var(--green-l);border-color:var(--green);}
+.card.green .val{color:var(--green);}
+.card.amber{background:var(--amber-l);border-color:var(--amber);}
+.card.amber .val{color:var(--amber);}
+.card.red{background:var(--red-l);border-color:var(--red);}
+.card.red .val{color:var(--red);}
+
+.eq-box{font-family:'Courier New',monospace;font-size:.9rem;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-s);padding:.7rem 1rem;color:var(--text);}
+.section-h{font-size:.95rem;font-weight:600;color:var(--text);}
+
+/* ── Data table ── */
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;}
+table{border-collapse:collapse;width:100%;font-size:.8rem;}
+th{background:var(--surface2);padding:7px 12px;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:6px 12px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--bg);}
+
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;}
+.modal{background:var(--surface);border-radius:var(--radius);padding:1.75rem;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.modal h2{font-size:1rem;font-weight:600;margin-bottom:.25rem;}
+.modal .sub-h{font-size:.8rem;color:var(--muted);margin-bottom:1.25rem;}
+.tower-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;}
+.tower-block{background:var(--bg);border-radius:var(--radius-s);padding:.9rem;}
+.tower-block h3{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.6rem;}
+.field{margin-bottom:.5rem;}
+.field label{font-size:.75rem;color:var(--muted);display:block;margin-bottom:3px;}
+.field input{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;background:var(--surface);color:var(--text);font-family:inherit;outline:none;}
+.field input:focus{border-color:var(--accent);}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;}
+.modal-btns button{padding:8px 18px;border-radius:var(--radius-s);border:1px solid var(--border);font-size:.83rem;cursor:pointer;font-family:inherit;}
+.modal-btns .ok{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--text);color:#fff;padding:.6rem 1.1rem;border-radius:var(--radius);font-size:.83rem;transform:translateY(60px);opacity:0;transition:all .3s;z-index:300;}
+.toast.show{transform:translateY(0);opacity:1;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cable Analyser</h1>
+  <span class="sub">Catenary fit · sag · clearance</span>
+</header>
+
+<div class="layout">
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+
+  <div>
+    <div class="sec-title">Load data</div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p>Drop CSV or <strong>browse</strong></p>
+      <input type="file" id="file-input" accept=".csv" multiple>
+    </div>
+  </div>
+
+  <div>
+    <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Project</span>
+    </div>
+    <div class="tree" id="tree"><div style="font-size:.78rem;color:var(--muted);">No files loaded</div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div>
+    <div class="sec-title">Towers</div>
+    <div class="tower-info" id="tower-info">Load a file to set tower coordinates.</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div>
+    <div class="sec-title">Analysis steps</div>
+    <div class="step-list">
+      <button class="step-btn" id="btn-clean" onclick="cleanData()" disabled>
+        <span class="num">1</span> Clean data
+      </button>
+      <button class="step-btn" id="btn-fit" onclick="fitCatenary()" disabled>
+        <span class="num">2</span> Fit catenary
+      </button>
+      <button class="step-btn primary" id="btn-plot" onclick="runPlot()" disabled>
+        <span class="num">3</span> Plot 3D
+      </button>
+      <div class="divider" style="margin:.25rem 0;"></div>
+      <button class="step-btn" id="btn-run-all" onclick="runAllFiles()" style="background:var(--green-l);border-color:var(--green);color:var(--green);">
+        <span class="num" style="border-color:var(--green);">✓</span> Fit all files
+      </button>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ── Main ── -->
+<div class="main">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('plot')">3D Plot</div>
+    <div class="tab" onclick="switchTab('results')">Results</div>
+    <div class="tab" onclick="switchTab('data')">Data table</div>
+    <div class="tab" onclick="switchTab('summary')">Summary</div>
+  </div>
+
+  <!-- Plot pane -->
+  <div class="pane active" id="pane-plot">
+    <div class="empty-state" id="plot-empty">
+      <div class="icon">📡</div>
+      <p>Load a file, set tower coordinates,<br>fit the catenary, then click Plot 3D.</p>
+    </div>
+    <div id="plot-div" style="display:none;"></div>
+  </div>
+
+  <!-- Results pane -->
+  <div class="pane" id="pane-results">
+    <div class="empty-state" id="results-empty">
+      <div class="icon">📐</div>
+      <p>Run the catenary fit first.</p>
+    </div>
+    <div id="results-content" style="display:none;flex-direction:column;gap:1.25rem;"></div>
+  </div>
+
+  <!-- Data table pane -->
+  <div class="pane" id="pane-data">
+    <div class="empty-state" id="data-empty">
+      <div class="icon">📋</div>
+      <p>Load a CSV file to inspect the data.</p>
+    </div>
+    <div id="data-tbl" style="display:none;" class="tbl-wrap"></div>
+  </div>
+
+  <!-- Summary pane -->
+  <div class="pane" id="pane-summary">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div class="section-h">Multi-file summary</div>
+      <button onclick="exportCsv()" style="padding:6px 14px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--surface);font-size:.8rem;cursor:pointer;font-family:inherit;">⬇ Export CSV</button>
+    </div>
+    <div class="empty-state" id="summary-empty">
+      <div class="icon">📊</div>
+      <p>Fit at least one file to see the summary.</p>
+    </div>
+    <div id="summary-tbl" style="display:none;" class="tbl-wrap"></div>
+  </div>
+</div>
+</div>
+
+<!-- ── Tower modal ── -->
+<div class="modal-bg" id="modal" style="display:none;">
+  <div class="modal">
+    <h2>Tower coordinates</h2>
+    <p class="sub-h" id="modal-filename"></p>
+    <div class="tower-grid">
+      <div class="tower-block">
+        <div class="field" style="margin-bottom:.75rem;"><label style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Tower 1 name</label><input type="text" id="t1name" placeholder="Tower 1"></div>
+        <div class="field"><label>X (easting)</label><input type="number" id="t1x" step="any" placeholder="0"></div>
+        <div class="field"><label>Y (northing)</label><input type="number" id="t1y" step="any" placeholder="0"></div>
+        <div class="field"><label>Z (elevation)</label><input type="number" id="t1z" step="any" placeholder="0"></div>
+      </div>
+      <div class="tower-block">
+        <div class="field" style="margin-bottom:.75rem;"><label style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Tower 2 name</label><input type="text" id="t2name" placeholder="Tower 2"></div>
+        <div class="field"><label>X (easting)</label><input type="number" id="t2x" step="any" placeholder="0"></div>
+        <div class="field"><label>Y (northing)</label><input type="number" id="t2y" step="any" placeholder="0"></div>
+        <div class="field"><label>Z (elevation)</label><input type="number" id="t2z" step="any" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button onclick="closeModal(false)">Cancel</button>
+      <button class="ok" onclick="closeModal(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const S = {
+  files: {},              // name → { name, folder, headers, rows, t1, t2, fit? }
+  active: null,           // active file name
+  pendingFile: null,
+  folderOrder: ['Inbox'], // ordered list of folder names
+  collapsedFolders: new Set(),
+};
+// Convenience helpers
+function activeFit()  { const e = activeEntry(); return e ? e.fit || null : null; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSV parsing
+// ─────────────────────────────────────────────────────────────────────────────
+function toNum(v) {
+  if (v == null || v === '') return NaN;
+  v = String(v).trim();
+  if (v.includes('.') && v.includes(',')) return parseFloat(v.replace(/\./g,'').replace(',','.'));
+  if (v.includes(',') && !v.includes('.')) return parseFloat(v.replace(',','.'));
+  return parseFloat(v);
+}
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (!lines.length) return null;
+  const sep = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
+  const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g,''));
+  const rows = lines.slice(1).map(l => {
+    const vals = l.split(sep).map(v => v.trim().replace(/^"|"$/g,''));
+    const obj = {};
+    headers.forEach((h,i) => { obj[h] = vals[i] ?? ''; });
+    return obj;
+  }).filter(r => Object.values(r).some(v => v !== ''));
+  return { headers, rows };
+}
+
+function detectAxes(headers) {
+  const clean = h => h.replace(/[\s\x00-\x1F\x7F]/g,'');
+  const cx = headers.find(h => clean(h).endsWith('X')) || null;
+  const cy = headers.find(h => clean(h) === 'Y') || null;
+  const cz = headers.find(h => clean(h) === 'Z') || null;
+  return { cx, cy, cz };
+}
+
+function folderFromName(name) {
+  return 'Inbox';   // all new files land in Inbox; user drags to other folders
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// File loading → triggers tower modal
+// ─────────────────────────────────────────────────────────────────────────────
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseCsv(e.target.result);
+    if (!parsed) { toast('Could not parse CSV'); return; }
+    S.pendingFile = { file, parsed };
+    openModal(file.name);
+  };
+  reader.readAsText(file);
+}
+
+function openModal(filename) {
+  document.getElementById('modal-filename').textContent = filename;
+  // Pre-fill if re-loading same file
+  const existing = S.files[filename];
+  if (existing && existing.t1) {
+    const {t1,t2} = existing;
+    ['x','y','z'].forEach(a => {
+      document.getElementById('t1'+a).value = t1[a];
+      document.getElementById('t2'+a).value = t2[a];
+    });
+    document.getElementById('t1name').value = t1.name || 'Tower 1';
+    document.getElementById('t2name').value = t2.name || 'Tower 2';
+  } else {
+    ['t1x','t1y','t1z','t2x','t2y','t2z'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('t1name').value = 'Tower 1';
+    document.getElementById('t2name').value = 'Tower 2';
+  }
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal(confirm) {
+  document.getElementById('modal').style.display = 'none';
+  if (!confirm || !S.pendingFile) { S.pendingFile = null; return; }
+
+  const t1 = { name: document.getElementById('t1name').value.trim() || 'Tower 1',
+               x: toNum(document.getElementById('t1x').value),
+               y: toNum(document.getElementById('t1y').value),
+               z: toNum(document.getElementById('t1z').value) };
+  const t2 = { name: document.getElementById('t2name').value.trim() || 'Tower 2',
+               x: toNum(document.getElementById('t2x').value),
+               y: toNum(document.getElementById('t2y').value),
+               z: toNum(document.getElementById('t2z').value) };
+
+  if ([t1.x,t1.y,t1.z,t2.x,t2.y,t2.z].some(isNaN)) {
+    toast('Please enter all 6 tower coordinates'); return;
+  }
+
+  const { file, parsed } = S.pendingFile;
+  S.files[file.name] = {
+    name: file.name,
+    folder: folderFromName(file.name),
+    headers: parsed.headers,
+    rows: parsed.rows,
+    t1, t2,
+  };
+  S.pendingFile = null;
+  S.active = file.name;
+  S.fit = null;
+
+  renderTree();
+  renderTowerInfo();
+  renderDataTable();
+  updateStepButtons();
+  renderSummary();
+  switchTab('data');
+  toast(`Loaded ${file.name} — ${parsed.rows.length} rows`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 1: Clean data — keep only //X, Y, Z columns
+// ─────────────────────────────────────────────────────────────────────────────
+function cleanData() {
+  const entry = activeEntry(); if (!entry) return;
+  const { cx, cy, cz } = detectAxes(entry.headers);
+  if (!cx||!cy||!cz) { toast('Cannot find //X, Y, Z columns'); return; }
+
+  entry.headers = [cx, cy, cz];
+  entry.rows = entry.rows.map(r => ({ [cx]: r[cx], [cy]: r[cy], [cz]: r[cz] }));
+
+  renderDataTable();
+  markDone('btn-clean');
+  updateStepButtons();
+  toast('Cleaned: only X, Y, Z columns kept');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 2: Fit catenary
+// ─────────────────────────────────────────────────────────────────────────────
+// The catenary is fitted in the vertical plane of the span.
+// We project each measured point onto the span axis (horizontal distance s),
+// then fit: Z = a * cosh((s - s0) / a) + b
+// using Levenberg-Marquardt style gradient descent.
+// ─────────────────────────────────────────────────────────────────────────────
+function fitCatenary() {
+  const entry = activeEntry(); if (!entry) return;
+  const { cx, cy, cz } = detectAxes(entry.headers);
+  if (!cx||!cy||!cz) { toast('Run Clean data first'); return; }
+
+  const { t1, t2 } = entry;
+
+  // Span vector (horizontal)
+  const dx = t2.x - t1.x, dy = t2.y - t1.y;
+  const L = Math.sqrt(dx*dx + dy*dy);   // horizontal span length
+  const ux = dx/L, uy = dy/L;           // unit vector along span
+
+  // Project measured points onto (s, Z) plane
+  const pts = [];
+  entry.rows.forEach(r => {
+    const px = toNum(r[cx]) - t1.x;
+    const py = toNum(r[cy]) - t1.y;
+    const pz = toNum(r[cz]);
+    if (isNaN(px)||isNaN(py)||isNaN(pz)) return;
+    const s = px*ux + py*uy;   // horizontal distance along span
+    pts.push({ s, z: pz });
+  });
+
+  if (pts.length < 4) { toast(`Need at least 4 valid points, found ${pts.length}`); return; }
+
+  // Also project tower points onto s axis
+  const s1 = 0, z1 = t1.z;
+  const s2 = L, z2 = t2.z;
+
+  // Initial guess: a = L/2 (typical catenary parameter), s0 = L/2, b from midpoint
+  const zMid = pts.reduce((acc, p) => acc + p.z, 0) / pts.length;
+  let params = [L * 0.8, L / 2, zMid - (L * 0.8)];
+
+  // Catenary model
+  const model = (s, [a, s0, b]) => a * Math.cosh((s - s0) / a) + b;
+
+  // Levenberg-Marquardt minimisation
+  const residuals = (p) => pts.map(pt => pt.z - model(pt.s, p));
+  const cost = (p) => residuals(p).reduce((s,r) => s+r*r, 0);
+
+  const jacobian = (p) => pts.map(pt => {
+    const u = (pt.s - p[1]) / p[0];
+    const ch = Math.cosh(u), sh = Math.sinh(u);
+    return [
+      ch - u * sh,          // dF/da
+      -sh,                   // dF/ds0
+      1                      // dF/db
+    ];
+  });
+
+  let lambda = 1e-3;
+  const maxIter = 2000;
+  let best = params.slice();
+  let bestCost = cost(params);
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    const J = jacobian(params);
+    const r = residuals(params);
+    // JtJ and Jtr
+    const JtJ = [[0,0,0],[0,0,0],[0,0,0]];
+    const Jtr = [0,0,0];
+    J.forEach((ji, i) => {
+      for (let a=0;a<3;a++) {
+        Jtr[a] += ji[a] * r[i];
+        for (let b=0;b<3;b++) JtJ[a][b] += ji[a] * ji[b];
+      }
+    });
+    // Add damping
+    for (let a=0;a<3;a++) JtJ[a][a] *= (1 + lambda);
+    // Solve (JtJ + λI) δ = Jtr
+    const delta = solveLinear3(JtJ, Jtr);
+    const newParams = params.map((p,i) => p + delta[i]);
+    // Protect a from going non-positive
+    if (newParams[0] <= 0) { lambda *= 10; continue; }
+    const newCost = cost(newParams);
+    if (newCost < bestCost) {
+      bestCost = newCost;
+      best = newParams.slice();
+      params = newParams;
+      lambda = Math.max(lambda / 10, 1e-10);
+    } else {
+      lambda = Math.min(lambda * 10, 1e10);
+    }
+    if (lambda > 1e9) break;
+  }
+
+  params = best;
+  const [a, s0, b] = params;
+
+  // R² on measured points
+  const zMeas = pts.map(p => p.z);
+  const zFit  = pts.map(p => model(p.s, params));
+  const zmean = zMeas.reduce((s,v)=>s+v,0)/zMeas.length;
+  const sst = zMeas.reduce((s,v)=>s+(v-zmean)**2,0);
+  const sse = zMeas.reduce((s,v,i)=>s+(v-zFit[i])**2,0);
+  const r2 = 1 - sse/sst;
+  const rmse = Math.sqrt(sse/pts.length);
+
+  // Extrapolate full catenary between s=0 (t1) and s=L (t2), 300 points
+  const N = 300;
+  const catenary3D = Array.from({length:N}, (_,i) => {
+    const s = s1 + (s2-s1)*i/(N-1);
+    const zc = model(s, params);
+    // Back-project to 3D
+    return {
+      x: t1.x + ux*s,
+      y: t1.y + uy*s,
+      z: zc,
+      s,
+    };
+  });
+
+  // Straight line between towers
+  const line3D = Array.from({length:N}, (_,i) => {
+    const t = i/(N-1);
+    return {
+      x: t1.x + (t2.x-t1.x)*t,
+      y: t1.y + (t2.y-t1.y)*t,
+      z: t1.z + (t2.z-t1.z)*t,
+      s: s1 + (s2-s1)*t,
+    };
+  });
+
+  // Clearance = vertical distance catenary Z - straight line Z (negative = sag below line)
+  const clearance = catenary3D.map((c,i) => c.z - line3D[i].z);
+  const minClearance = Math.min(...clearance);
+  const maxClearance = Math.max(...clearance);
+  const minIdx = clearance.indexOf(minClearance);
+  const maxIdx = clearance.indexOf(maxClearance);
+
+  // Max sag = largest downward distance from chord (most negative clearance value)
+  // sagIdx is already minIdx (where clearance is most negative)
+  const sagIdx = minIdx;
+  const maxSagDist = Math.abs(minClearance); // positive value = distance below chord
+
+  entry.fit = { params, a, s0, b, r2, rmse, pts,
+               catenary3D, line3D, clearance,
+               minClearance, maxClearance, minIdx, maxIdx,
+               maxSagDist, sagIdx, L, ux, uy, t1, t2, s1, s2, model,
+               cx, cy, cz, filename: entry.name };
+
+  markDone('btn-fit');
+  updateStepButtons();
+  renderResults();
+  renderSummary();
+  switchTab('results');
+  toast(`Catenary fitted · R² = ${r2.toFixed(4)}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Linear solver (Gaussian elimination 3×3)
+// ─────────────────────────────────────────────────────────────────────────────
+function solveLinear3(A, b) {
+  const m = A.map((r,i) => [...r, b[i]]);
+  for (let col=0;col<3;col++){
+    let maxRow=col;
+    for(let row=col+1;row<3;row++) if(Math.abs(m[row][col])>Math.abs(m[maxRow][col])) maxRow=row;
+    [m[col],m[maxRow]]=[m[maxRow],m[col]];
+    for(let row=col+1;row<3;row++){
+      if(Math.abs(m[col][col])<1e-15) continue;
+      const f=m[row][col]/m[col][col];
+      for(let k=col;k<=3;k++) m[row][k]-=f*m[col][k];
+    }
+  }
+  const x=[0,0,0];
+  for(let i=2;i>=0;i--){
+    x[i]=m[i][3];
+    for(let j=i+1;j<3;j++) x[i]-=m[i][j]*x[j];
+    if(Math.abs(m[i][i])>1e-15) x[i]/=m[i][i];
+  }
+  return x;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 3: Plot 3D
+// ─────────────────────────────────────────────────────────────────────────────
+function runPlot() {
+  if (!activeFit()) { toast('Run catenary fit first'); return; }
+  const f = activeFit();
+  const entry = activeEntry();
+  const { cx, cy, cz } = f;
+
+  // Measured points
+  const mxs=[], mys=[], mzs=[];
+  entry.rows.forEach(r => {
+    const x=toNum(r[cx]),y=toNum(r[cy]),z=toNum(r[cz]);
+    if(!isNaN(x)&&!isNaN(y)&&!isNaN(z)){ mxs.push(x);mys.push(y);mzs.push(z); }
+  });
+
+  // Catenary curve
+  const cxs = f.catenary3D.map(p=>p.x);
+  const cys = f.catenary3D.map(p=>p.y);
+  const czs = f.catenary3D.map(p=>p.z);
+
+  // Straight line
+  const lxs = f.line3D.map(p=>p.x);
+  const lys = f.line3D.map(p=>p.y);
+  const lzs = f.line3D.map(p=>p.z);
+
+  // Clearance lines at key points (every 10th)
+  const clTraces = [];
+  for (let i=0; i<f.catenary3D.length; i+=15) {
+    clTraces.push({
+      type:'scatter3d', mode:'lines', showlegend:false,
+      x:[f.catenary3D[i].x, f.line3D[i].x],
+      y:[f.catenary3D[i].y, f.line3D[i].y],
+      z:[f.catenary3D[i].z, f.line3D[i].z],
+      line:{color:'#e0a060', width:1.5}, opacity:0.5
+    });
+  }
+
+  // Max sag marker
+  const sagPt = f.catenary3D[f.sagIdx];
+  const maxClearPt = f.catenary3D[f.minIdx];
+
+  const traces = [
+    // Measured points
+    { type:'scatter3d', mode:'markers', name:'Measured',
+      x:mxs, y:mys, z:mzs,
+      marker:{size:3, color:mzs, colorscale:'Blues', opacity:.85,
+              colorbar:{title:'Z (m)', len:.5, thickness:10}} },
+    // Catenary
+    { type:'scatter3d', mode:'lines', name:'Fitted catenary',
+      x:cxs, y:cys, z:czs,
+      line:{color:'#2e6b8a', width:5} },
+    // Straight line
+    { type:'scatter3d', mode:'lines', name:'Tower–tower line',
+      x:lxs, y:lys, z:lzs,
+      line:{color:'#b03030', width:3, dash:'dot'} },
+    // Towers
+    { type:'scatter3d', mode:'markers+text', name:'Towers',
+      x:[f.t1.x, f.t2.x], y:[f.t1.y, f.t2.y], z:[f.t1.z, f.t2.z],
+      text:[f.t1.name, f.t2.name], textposition:'top center',
+      marker:{size:8, color:'#2e7a52', symbol:'diamond'} },
+    // Max sag
+    { type:'scatter3d', mode:'markers+text', name:'Max sag',
+      x:[sagPt.x], y:[sagPt.y], z:[sagPt.z],
+      text:[`Max sag: ${f.maxSagDist.toFixed(3)}m`], textposition:'bottom center',
+      marker:{size:7, color:'#a05c12', symbol:'circle'} },
+    ...clTraces
+  ];
+
+  document.getElementById('plot-empty').style.display = 'none';
+  const plotEl = document.getElementById('plot-div');
+  plotEl.style.display = '';
+
+  Plotly.newPlot(plotEl, traces, {
+    margin:{t:30,l:0,r:0,b:0},
+    scene:{
+      xaxis:{title:'X (easting)'},
+      yaxis:{title:'Y (northing)'},
+      zaxis:{title:'Z (elevation)'},
+      bgcolor:'#ffffff',
+      camera:{eye:{x:1.4,y:1.4,z:.9}}
+    },
+    legend:{x:.02,y:.98,bgcolor:'rgba(255,255,255,.9)',bordercolor:'#ddd9d0',borderwidth:1},
+    paper_bgcolor:'white',
+    font:{family:'Segoe UI,system-ui,sans-serif',size:11,color:'#1c1b18'}
+  }, {responsive:true, displayModeBar:true});
+
+  switchTab('plot');
+  toast('3D plot rendered');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render results panel
+// ─────────────────────────────────────────────────────────────────────────────
+function renderResults() {
+  const f = activeFit(); if (!f) return;
+  const entry = activeEntry();
+  const { t1, t2 } = entry;
+
+  document.getElementById('results-empty').style.display = 'none';
+  const rc = document.getElementById('results-content');
+  rc.style.display = 'flex';
+
+  const sagPt   = f.catenary3D[f.sagIdx];
+  const maxClPt = f.catenary3D[f.minIdx];
+
+  // Horizontal distance from t1 to max-sag point
+  const sagDist = f.catenary3D[f.sagIdx].s.toFixed(2);
+
+  rc.innerHTML = `
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Catenary equation</div>
+      <div class="eq-box">Z(s) = ${f.a.toFixed(4)} · cosh( (s − ${f.s0.toFixed(4)}) / ${f.a.toFixed(4)} ) + ${f.b.toFixed(4)}</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:4px;">s = horizontal distance along span from Tower 1 (m)</div>
+    </div>
+
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Fit quality</div>
+      <div class="cards">
+        <div class="card"><div class="lbl">R²</div><div class="val">${f.r2.toFixed(5)}</div></div>
+        <div class="card"><div class="lbl">RMSE</div><div class="val">${f.rmse.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">Measured pts</div><div class="val">${f.pts.length}</div></div>
+        <div class="card"><div class="lbl">Span length</div><div class="val">${f.L.toFixed(2)}<span class="unit">m</span></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Catenary parameters</div>
+      <div class="cards">
+        <div class="card"><div class="lbl">a (catenary param)</div><div class="val">${f.a.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">s₀ (vertex offset)</div><div class="val">${f.s0.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">b (vertical offset)</div><div class="val">${f.b.toFixed(4)}<span class="unit">m</span></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Sag analysis</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem;">Max sag = maximum vertical distance between catenary and the straight chord line.</div>
+      <div class="cards">
+        <div class="card amber"><div class="lbl">Max sag (dist. to chord)</div><div class="val">${f.maxSagDist.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">Location from ${f.t1.name}</div><div class="val">${sagDist}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">Max sag X</div><div class="val">${sagPt.x.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">Max sag Y</div><div class="val">${sagPt.y.toFixed(3)}</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Clearance to ${f.t1.name}–${f.t2.name} chord</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem;">
+        Vertical distance: catenary Z − chord Z. Negative = cable hangs below the chord line.
+      </div>
+      <div class="cards">
+        <div class="card red"><div class="lbl">Min clearance (= max sag)</div><div class="val">${f.minClearance.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card green"><div class="lbl">Max clearance</div><div class="val">${f.maxClearance.toFixed(4)}<span class="unit">m</span></div></div>
+        <div class="card"><div class="lbl">Max sag at dist. from ${f.t1.name}</div><div class="val">${f.catenary3D[f.minIdx].s.toFixed(2)}<span class="unit">m</span></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-h" style="margin-bottom:.6rem;">Tower coordinates</div>
+      <div class="cards">
+        <div class="card"><div class="lbl">${t1.name} X</div><div class="val">${t1.x.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">${t1.name} Y</div><div class="val">${t1.y.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">${t1.name} Z</div><div class="val">${t1.z.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">${t2.name} X</div><div class="val">${t2.x.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">${t2.name} Y</div><div class="val">${t2.y.toFixed(3)}</div></div>
+        <div class="card"><div class="lbl">${t2.name} Z</div><div class="val">${t2.z.toFixed(3)}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch: fit all loaded files
+// ─────────────────────────────────────────────────────────────────────────────
+async function runAllFiles() {
+  const names = Object.keys(S.files);
+  if (!names.length) { toast('No files loaded'); return; }
+  let done = 0, failed = 0;
+  for (const name of names) {
+    S.active = name;
+    try {
+      cleanData();
+      fitCatenary();
+      done++;
+    } catch(e) {
+      failed++;
+      console.error(name, e);
+    }
+  }
+  renderTree();
+  renderSummary();
+  switchTab('summary');
+  toast(`Fitted ${done} file(s)${failed ? `, ${failed} failed` : ''}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Summary table
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSummary() {
+  const empty = document.getElementById('summary-empty');
+  const wrap  = document.getElementById('summary-tbl');
+  const fitted = Object.values(S.files).filter(e => e.fit);
+  if (!fitted.length) { empty.style.display=''; wrap.style.display='none'; return; }
+  empty.style.display = 'none';
+  wrap.style.display  = '';
+
+  const rows = fitted.map((e,i) => {
+    const f = e.fit;
+    const sagPt = f.catenary3D[f.sagIdx];
+    const status = f.r2 >= 0.999 ? 'good' : f.r2 >= 0.99 ? 'ok' : 'poor';
+    const statusColor = status==='good' ? 'var(--green)' : status==='ok' ? 'var(--amber)' : 'var(--red)';
+    return `<tr>
+      <td style="font-weight:500;">${e.name}</td>
+      <td>${e.t1.name}</td>
+      <td>${e.t2.name}</td>
+      <td>${f.L.toFixed(2)}</td>
+      <td style="font-weight:600;color:var(--amber);">${f.maxSagDist.toFixed(4)}</td>
+      <td>${f.catenary3D[f.sagIdx].s.toFixed(2)}</td>
+      <td>${sagPt.x.toFixed(3)}</td>
+      <td>${sagPt.y.toFixed(3)}</td>
+      <td>${sagPt.z.toFixed(3)}</td>
+      <td style="color:${statusColor};">${f.r2.toFixed(5)}</td>
+      <td>${f.rmse.toFixed(4)}</td>
+      <td>${f.pts.length}</td>
+      <td><button onclick="jumpToFile('${e.name}')" style="padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);font-size:.75rem;cursor:pointer;">View</button></td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>File</th>
+      <th>Tower 1</th>
+      <th>Tower 2</th>
+      <th>Span (m)</th>
+      <th>Max sag (m)</th>
+      <th>Sag loc. (m)</th>
+      <th>Sag X</th>
+      <th>Sag Y</th>
+      <th>Sag Z</th>
+      <th>R²</th>
+      <th>RMSE (m)</th>
+      <th>Points</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function jumpToFile(name) {
+  S.active = name;
+  renderTree(); renderTowerInfo(); renderDataTable(); updateStepButtons();
+  renderResults();
+  runPlot();
+}
+
+function exportCsv() {
+  const fitted = Object.values(S.files).filter(e => e.fit);
+  if (!fitted.length) { toast('Nothing to export'); return; }
+  const headers = ['File','Tower1','Tower2','Span_m','MaxSag_m','SagLoc_m','SagX','SagY','SagZ','R2','RMSE_m','Points'];
+  const lines = [headers.join(',')];
+  fitted.forEach(e => {
+    const f = e.fit;
+    const sagPt = f.catenary3D[f.sagIdx];
+    lines.push([
+      `"${e.name}"`, `"${e.t1.name}"`, `"${e.t2.name}"`,
+      f.L.toFixed(4), f.maxSagDist.toFixed(4),
+      f.catenary3D[f.sagIdx].s.toFixed(4),
+      sagPt.x.toFixed(4), sagPt.y.toFixed(4), sagPt.z.toFixed(4),
+      f.r2.toFixed(6), f.rmse.toFixed(6), f.pts.length
+    ].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cable_summary.csv';
+  a.click();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function activeEntry() { return S.files[S.active] || null; }
+
+function renderTree() {
+  const tree = document.getElementById('tree');
+  tree.innerHTML = '';
+  // Collect folder order: existing folders first, then any new ones
+  const folderMap = {};
+  Object.values(S.files).forEach(f => {
+    if (!folderMap[f.folder]) folderMap[f.folder] = [];
+    folderMap[f.folder].push(f);
+  });
+  const folderNames = S.folderOrder.filter(n => folderMap[n] || n === 'Inbox');
+  // Add any folders not yet in order
+  Object.keys(folderMap).forEach(n => { if (!folderNames.includes(n)) folderNames.push(n); });
+
+  if (!Object.keys(folderMap).length) {
+    tree.innerHTML = '<div style="font-size:.78rem;color:var(--muted);padding:4px 6px;">No files loaded</div>';
+    addFolderAddRow(tree);
+    return;
+  }
+
+  folderNames.forEach(folderName => {
+    const files = folderMap[folderName] || [];
+    const isCollapsed = S.collapsedFolders.has(folderName);
+
+    // Folder row
+    const row = document.createElement('div');
+    row.className = 'tree-folder-row';
+    row.dataset.folder = folderName;
+    row.innerHTML = `
+      <span class="tree-folder-toggle ${isCollapsed?'':'open'}">▶</span>
+      <span>📁</span>
+      <span class="tree-folder-name">${folderName}</span>
+      <span class="tree-badge">${files.length}</span>
+      <span class="tree-folder-actions">
+        <button class="icon-btn" title="Rename folder" onclick="renameFolder(event,'${folderName}')">✏</button>
+        <button class="icon-btn red" title="Remove folder (moves files to Inbox)" onclick="removeFolder(event,'${folderName}')">🗑</button>
+      </span>`;
+    row.onclick = (e) => {
+      if (e.target.closest('.tree-folder-actions') || e.target.closest('.tree-folder-name-input')) return;
+      S.collapsedFolders[isCollapsed?'delete':'add'](folderName);
+      renderTree();
+    };
+    // Drop target
+    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault(); row.classList.remove('drag-over');
+      const fname = e.dataTransfer.getData('text/plain');
+      if (fname && S.files[fname]) { S.files[fname].folder = folderName; renderTree(); }
+    });
+    tree.appendChild(row);
+
+    // Children
+    const children = document.createElement('div');
+    children.className = 'tree-folder-children' + (isCollapsed?' collapsed':'');
+    files.forEach(f => {
+      const fi = document.createElement('div');
+      fi.className = 'tree-file' + (S.active===f.name?' active':'');
+      fi.draggable = true;
+      const hasFit = !!f.fit;
+      fi.innerHTML = `
+        <span>📄</span>
+        <span class="tree-file-name">${f.name}</span>
+        ${hasFit?'<span style="color:var(--green);font-size:.72rem;">✓</span>':''}
+        <span class="tree-file-actions">
+          <button class="icon-btn red" title="Remove file" onclick="removeFile(event,'${f.name}')">✕</button>
+        </span>`;
+      fi.onclick = (e) => {
+        if (e.target.closest('.tree-file-actions')) return;
+        S.active = f.name;
+        renderTree(); renderTowerInfo(); renderDataTable(); updateStepButtons();
+        switchTab('data');
+      };
+      fi.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', f.name);
+        fi.classList.add('dragging');
+      });
+      fi.addEventListener('dragend', () => fi.classList.remove('dragging'));
+      children.appendChild(fi);
+    });
+    tree.appendChild(children);
+  });
+
+  addFolderAddRow(tree);
+}
+
+function addFolderAddRow(tree) {
+  const add = document.createElement('div');
+  add.className = 'tree-add-folder';
+  add.innerHTML = '＋ New folder';
+  add.onclick = () => {
+    const name = prompt('Folder name:');
+    if (name && name.trim()) {
+      const n = name.trim();
+      if (!S.folderOrder.includes(n)) S.folderOrder.push(n);
+      // Create a placeholder so folder appears even without files
+      S.emptyFolders = S.emptyFolders || new Set();
+      S.emptyFolders.add(n);
+      renderTree();
+    }
+  };
+  tree.appendChild(add);
+}
+
+function renameFolder(e, oldName) {
+  e.stopPropagation();
+  // Find the name span and replace with an input
+  const row = e.target.closest('.tree-folder-row');
+  const nameSpan = row.querySelector('.tree-folder-name');
+  const input = document.createElement('input');
+  input.className = 'tree-folder-name-input';
+  input.value = oldName;
+  nameSpan.replaceWith(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const newName = input.value.trim() || oldName;
+    if (newName !== oldName) {
+      // Update all files in this folder
+      Object.values(S.files).forEach(f => { if (f.folder===oldName) f.folder=newName; });
+      // Update folderOrder
+      const idx = S.folderOrder.indexOf(oldName);
+      if (idx>=0) S.folderOrder[idx]=newName;
+      if (S.collapsedFolders.has(oldName)) { S.collapsedFolders.delete(oldName); S.collapsedFolders.add(newName); }
+    }
+    renderTree();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => { if (e.key==='Enter') commit(); if (e.key==='Escape') renderTree(); });
+}
+
+function removeFolder(e, folderName) {
+  e.stopPropagation();
+  if (folderName === 'Inbox') { toast('Cannot remove Inbox'); return; }
+  const count = Object.values(S.files).filter(f=>f.folder===folderName).length;
+  if (count && !confirm(`Move ${count} file(s) from "${folderName}" to Inbox?`)) return;
+  Object.values(S.files).forEach(f => { if (f.folder===folderName) f.folder='Inbox'; });
+  S.folderOrder = S.folderOrder.filter(n=>n!==folderName);
+  S.collapsedFolders.delete(folderName);
+  renderTree();
+}
+
+function removeFile(e, fname) {
+  e.stopPropagation();
+  if (!confirm(`Remove "${fname}" from project?`)) return;
+  delete S.files[fname];
+  if (S.active===fname) S.active = Object.keys(S.files)[0] || null;
+  renderTree(); renderTowerInfo(); renderDataTable(); updateStepButtons(); renderSummary();
+  toast(`Removed ${fname}`);
+}
+
+function renderTowerInfo() {
+  const entry = activeEntry();
+  const el = document.getElementById('tower-info');
+  if (!entry) { el.textContent = 'Load a file to set tower coordinates.'; return; }
+  const {t1,t2} = entry;
+  el.innerHTML = `
+    <b>${t1.name}</b><br>
+    X: ${t1.x} &nbsp; Y: ${t1.y} &nbsp; Z: ${t1.z}<br><br>
+    <b>${t2.name}</b><br>
+    X: ${t2.x} &nbsp; Y: ${t2.y} &nbsp; Z: ${t2.z}
+  `;
+}
+
+function renderDataTable() {
+  const entry = activeEntry();
+  const wrap = document.getElementById('data-tbl');
+  const empty = document.getElementById('data-empty');
+  if (!entry) { wrap.style.display='none'; empty.style.display=''; return; }
+  empty.style.display = 'none';
+  wrap.style.display = '';
+  const limit = Math.min(entry.rows.length, 500);
+  const heads = entry.headers.map(h=>`<th>${h}</th>`).join('');
+  const rows = entry.rows.slice(0,limit).map(r =>
+    '<tr>'+entry.headers.map(h=>`<td>${r[h]??''}</td>`).join('')+'</tr>'
+  ).join('');
+  const note = entry.rows.length>500
+    ? `<div style="padding:6px 12px;font-size:.73rem;color:var(--muted);">Showing first 500 of ${entry.rows.length} rows</div>` : '';
+  wrap.innerHTML = `<table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table>${note}`;
+}
+
+function updateStepButtons() {
+  const entry = activeEntry();
+  const hasFile = !!entry;
+  const hasFit  = !!(entry && entry.fit);
+  setBtn('btn-clean', hasFile, false);
+  setBtn('btn-fit',   hasFile, false);
+  setBtn('btn-plot',  hasFit,  false);
+}
+
+function setBtn(id, enabled, done) {
+  const btn = document.getElementById(id);
+  btn.disabled = !enabled;
+  if (done) btn.classList.add('done');
+}
+
+function markDone(id) {
+  document.getElementById(id).classList.add('done');
+}
+
+function switchTab(id) {
+  const tabIds = ['plot','results','data','summary'];
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', tabIds[i]===id);
+  });
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// File drop / input
+// ─────────────────────────────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  [...e.dataTransfer.files].filter(f=>f.name.endsWith('.csv')).forEach(loadFile);
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  [...e.target.files].forEach(loadFile);
+  e.target.value = '';
+});
+</script>
+</body>
+</html>
